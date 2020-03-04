@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <unistd.h>
 
 #define	MAXPIN	53
 
@@ -88,7 +89,10 @@ main(int argc, char **argv)
 
 	grok_args(argc, argv);
 
-	v = read_pin(pin);
-	printf("pin %d is %d\n", pin, v);
+	for (;;) {
+		v = read_pin(pin);
+		printf("pin %d is %d\n", pin, v);
+		sleep(1);
+	}
 	return 0;
 }
