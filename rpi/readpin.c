@@ -1,5 +1,6 @@
 /*
  * Read an I/O pin.  Just to prove I can.
+ * Now with wiringpi
  */
 
 #include <gpiod.h>
@@ -8,6 +9,7 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <wiringPi.h>
 
 #define	MAXPIN	53
 
@@ -15,13 +17,15 @@ char *myname;
 int pin;
 int timetest;
 int timing_loops;
+int lib_mode;
 
 static void
 set_defaults()
 {
 	pin = 0;
 	timetest = 0;
-	timing_loops = 10000;
+	lib_mode = 0;
+	timing_loops = 100000;
 }
 
 static void
@@ -32,6 +36,8 @@ usage()
 		myname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "\t-p <pin number (%d)>\n", pin);
+	fprintf(stderr, "\t-l <run using libgpiod (%s)>\n",
+		lib_mode? "yes": "no");
 	fprintf(stderr, "\t-t <run a timing test (%s)>\n",
 		timetest? "yes": "no");
 	exit(1);
@@ -45,8 +51,11 @@ grok_args(int argc, char **argv) {
 
 	errors = 0;
 	set_defaults();
-	while ((c = getopt(argc, argv, "tp:")) != EOF)
+	while ((c = getopt(argc, argv, "ltp:")) != EOF)
 	switch (c) {
+		case 'l':
+			lib_mode++;
+			break;
 		case 't':
 			timetest++;
 			break;
@@ -80,14 +89,17 @@ static int
 read_pin(unsigned int p) {
 	int r;
 
-	r = gpiod_ctxless_get_value("0", p, 0, "me");
+	if (lib_mode) {
+		r = gpiod_ctxless_get_value("0", p, 0, "me");
 
-	if (r < 0) {
-		fprintf(stderr, "%s: error on get value\n",
-			myname);
-		perror("gpiod_ctxless_get_value");
-		exit(1);
-	}
+		if (r < 0) {
+			fprintf(stderr, "%s: error on get value\n",
+				myname);
+			perror("gpiod_ctxless_get_value");
+			exit(1);
+		}
+	} else
+		r = digitalRead(pin);
 
 	return r;
 }
@@ -130,7 +142,7 @@ timing_loop()
 	totalusec += end.tv_usec;
 	totalusec -= (long long)start.tv_sec * (long long)1000000;
 	totalusec -= start.tv_usec;
-	printf("usec/loop = %.1f\n", (double)totalusec / (double)timing_loops);
+	printf("usec/loop = %.2f\n", (double)totalusec / (double)timing_loops);
 }
 
 int
@@ -140,6 +152,11 @@ main(int argc, char **argv)
 	myname = *argv;
 
 	grok_args(argc, argv);
+
+	if (!lib_mode) {
+		wiringPiSetup();
+		pinMode(pin, INPUT);
+	}
 
 	if (timetest)
 		timing_loop();
