@@ -7,16 +7,21 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #define	MAXPIN	53
 
 char *myname;
 int pin;
+int timetest;
+int timing_loops;
 
 static void
 set_defaults()
 {
 	pin = 0;
+	timetest = 0;
+	timing_loops = 10000;
 }
 
 static void
@@ -27,6 +32,8 @@ usage()
 		myname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "\t-p <pin number (%d)>\n", pin);
+	fprintf(stderr, "\t-t <run a timing test (%s)>\n",
+		timetest? "yes": "no");
 	exit(1);
 }
 
@@ -38,8 +45,11 @@ grok_args(int argc, char **argv) {
 
 	errors = 0;
 	set_defaults();
-	while ((c = getopt(argc, argv, "p:")) != EOF)
+	while ((c = getopt(argc, argv, "tp:")) != EOF)
 	switch (c) {
+		case 't':
+			timetest++;
+			break;
 		case 'p':
 			pin = atoi(optarg);
 			break;
@@ -66,7 +76,8 @@ grok_args(int argc, char **argv) {
 		usage();
 }
 
-static int read_pin(unsigned int p) {
+static int
+read_pin(unsigned int p) {
 	int r;
 
 	r = gpiod_ctxless_get_value("0", p, 0, "me");
@@ -81,6 +92,47 @@ static int read_pin(unsigned int p) {
 	return r;
 }
 
+static void
+status_loop() {
+	int v;
+
+	for (;;) {
+		v = read_pin(pin);
+		printf("pin %d is %d\n", pin, v);
+		sleep(1);
+	}
+}
+
+static void
+timing_loop()
+{
+	int r;
+	int i;
+	struct timeval start, end;
+	long long totalusec;
+
+	r = gettimeofday(&start, NULL);
+	if (r != 0) {
+		fprintf(stderr, "%s: failed to get start time\n", myname);
+		exit(1);
+	}
+
+	for (i = 0; i < timing_loops; i++)
+		(void)read_pin(pin);
+
+	r = gettimeofday(&end, NULL);
+	if (r != 0) {
+		fprintf(stderr, "%s: failed to get start time\n", myname);
+		exit(1);
+	}
+
+	totalusec = (long long)end.tv_sec * (long long)1000000;
+	totalusec += end.tv_usec;
+	totalusec -= (long long)start.tv_sec * (long long)1000000;
+	totalusec -= start.tv_usec;
+	printf("usec/loop = %.1f\n", (double)totalusec / (double)timing_loops);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -89,10 +141,10 @@ main(int argc, char **argv)
 
 	grok_args(argc, argv);
 
-	for (;;) {
-		v = read_pin(pin);
-		printf("pin %d is %d\n", pin, v);
-		sleep(1);
-	}
+	if (timetest)
+		timing_loop();
+	else
+		status_loop();
+
 	return 0;
 }
