@@ -18,6 +18,7 @@ int pin;
 int timetest;
 int timing_loops;
 int lib_mode;
+int scan_mode;
 
 static void
 set_defaults()
@@ -25,6 +26,7 @@ set_defaults()
 	pin = 0;
 	timetest = 0;
 	lib_mode = 0;
+	scan_mode = 0;
 	timing_loops = 100000;
 }
 
@@ -38,6 +40,8 @@ usage()
 	fprintf(stderr, "\t-p <pin number (%d)>\n", pin);
 	fprintf(stderr, "\t-l <run using libgpiod (%s)>\n",
 		lib_mode? "yes": "no");
+	fprintf(stderr, "\t-s <scan the pins for 1s (%s)>\n",
+		scan_mode? "yes": "no");
 	fprintf(stderr, "\t-t <run a timing test (%s)>\n",
 		timetest? "yes": "no");
 	exit(1);
@@ -51,8 +55,11 @@ grok_args(int argc, char **argv) {
 
 	errors = 0;
 	set_defaults();
-	while ((c = getopt(argc, argv, "ltp:")) != EOF)
+	while ((c = getopt(argc, argv, "sltp:")) != EOF)
 	switch (c) {
+		case 's':
+			scan_mode++;
+			break;
 		case 'l':
 			lib_mode++;
 			break;
@@ -64,6 +71,11 @@ grok_args(int argc, char **argv) {
 			break;
 		default:
 			usage();
+	}
+
+	if (scan_mode && timetest) {
+		fprintf(stderr, "%s: scan mode and timing loop mode are mutually exclusive\n");
+		errors++;
 	}
 
 	nargs = argc - optind;
@@ -99,7 +111,7 @@ read_pin(unsigned int p) {
 			exit(1);
 		}
 	} else
-		r = digitalRead(pin);
+		r = digitalRead(p);
 
 	return r;
 }
@@ -145,6 +157,35 @@ timing_loop()
 	printf("usec/loop = %.2f\n", (double)totalusec / (double)timing_loops);
 }
 
+static void
+scan_loop()
+{
+	int p;
+	int v;
+	int first;
+
+	for (p = 0; p < MAXPIN; p++)
+		pinMode(p, INPUT);
+
+	for (;;) {
+		first = 1;
+		for (p = 0; p < MAXPIN; p++) {
+			v = read_pin(p);
+			if (v) {
+				if (!first)
+					printf(", ");
+				first = 0;
+				printf("%d", p);
+			}
+		}
+		if (!first)
+			printf("\n");
+		else
+			printf("None\n");
+		sleep(1);
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -160,6 +201,8 @@ main(int argc, char **argv)
 
 	if (timetest)
 		timing_loop();
+	else if (scan_mode)
+		scan_loop();
 	else
 		status_loop();
 
