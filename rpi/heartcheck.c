@@ -15,11 +15,13 @@
 
 char *myname;
 int pin;
+int debug;
 
 static void
 set_defaults()
 {
 	pin = 29;
+	debug = 0;
 }
 
 static void
@@ -30,6 +32,7 @@ usage()
 		myname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "\t-p <pin number (%d)>\n", pin);
+	fprintf(stderr, "\t-d (set debugging mode)\n");
 	exit(1);
 }
 
@@ -41,8 +44,11 @@ grok_args(int argc, char **argv) {
 
 	errors = 0;
 	set_defaults();
-	while ((c = getopt(argc, argv, "slp:")) != EOF)
+	while ((c = getopt(argc, argv, "dp:")) != EOF)
 	switch (c) {
+		case 'd':
+			debug++;
+			break;
 		case 'p':
 			pin = atoi(optarg);
 			break;
@@ -72,6 +78,58 @@ grok_args(int argc, char **argv) {
 static pthread_t counter_thread;
 static volatile int count;
 
+#define	MAX_STAMP	50
+
+struct stamp_s {
+	unsigned long delta_t;
+	int v;
+};
+
+long long stamp_start;
+
+int nstamp;
+struct stamp_s stamps[MAX_STAMP];
+
+static void
+stamp_init()
+{
+	int r;
+	struct timeval s;
+
+	nstamp = 0;
+
+	r = gettimeofday(&s, NULL);
+	if (r != 0) {
+		fprintf(stderr, "%s: failed to get stamp time\n", myname);
+		exit(1);
+	}
+
+	stamp_start = (long long)s.tv_sec * (long long)1000000 + s.tv_usec;
+}
+
+static void
+stamp(int e)
+{
+	int r;
+	struct timeval stamp;
+	long long dt;
+
+	if (nstamp >= MAX_STAMP)
+		return;
+
+	r = gettimeofday(&stamp, NULL);
+	if (r != 0) {
+		fprintf(stderr, "%s: failed to get stamp time\n", myname);
+		exit(1);
+	}
+
+	dt = (long long)stamp.tv_sec * (long long)1000000 + stamp.tv_usec;
+	dt -= stamp_start;
+	stamps[nstamp].v = e;
+	stamps[nstamp].delta_t = dt;
+	nstamp++;
+}
+
 static void *
 counter_routine(void *arg)
 {
@@ -80,8 +138,13 @@ counter_routine(void *arg)
 	old = 0;
 	count = 0;
 
+	stamp_init();
+
 	for (;;) {
 		h = digitalRead(pin);
+		if (debug && h != old)
+			stamp(h);
+
 		if (h && !old)
 			count++;
 		old = h;
@@ -104,6 +167,26 @@ spawn_counter()
 	}
 }
 
+static void
+print_stamps()
+{
+	int i;
+	unsigned long last;
+
+	if (nstamp) {
+		printf("Time Stamps:\n");
+
+		last = 0;
+		for (i = 0; i < nstamp; i++) {
+			printf("%6d (%d): %d\n",
+				stamps[i].delta_t,
+				stamps[i].delta_t - last,
+				stamps[i].v);
+			last = stamps[i].delta_t;
+		}
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -118,6 +201,7 @@ main(int argc, char **argv)
 	spawn_counter();
 	sleep(1);
 	printf("Counter = %d\n", count);
+	print_stamps();
 
 	return 0;
 }
