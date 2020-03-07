@@ -185,18 +185,18 @@ void loop() {
   setMagnet();
 
   // Wait to sample ADC
-  while (millis() - loop_t < (P1_TIME - A_SAMPLE_TIME)) ;
+  while (micros() - loop_t < (P1_TIME - A_SAMPLE_TIME)) ;
 
   // Get the sensor value
   getValue();
   setValue();
 
   // Wait for P1
-  while (millis() - loop_t < P1_TIME) ;
+  while (micros() - loop_t < P1_TIME) ;
 
   // Signal the RPi
   digitalWrite(PIN_CLOCK, HIGH);
 
   // Wait for P2
-  while (millis() - loop_t < P2_TIME) ;
+  while (micros() - loop_t < P2_TIME) ;
 }
