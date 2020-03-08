@@ -33,6 +33,8 @@
 // RPi Clocking
 #define	PIN_CLOCK	1
 
+uint32_t loop_t;
+
 void setup() {
   pinMode(PIN_OL0, INPUT);
   pinMode(PIN_OL1, INPUT);
@@ -63,11 +65,12 @@ void setup() {
 
   // Turn on the built-in LED.  We are awake!
   digitalWrite(PIN_LED0, HIGH);
+
+  loop_t = micros();
 }
 
 #define	ADC_MAX	62	// biggest possible sensor output value
 
-uint32_t loop_t;
 uint8_t command;
 uint8_t value;
 uint16_t min_adc_value;
@@ -93,6 +96,9 @@ void getCommand() {
 //
 // Read the ADC pin and convert it to an output value
 void getValue() {
+
+/*XXX QQQ test stuff */value = command * 2; return;
+
   if (!enabled) {
     value = 0;
     return;
@@ -111,6 +117,7 @@ void getValue() {
   if (value > ADC_MAX)
     value = ADC_MAX;
   value += 1;
+
 }
 
 //
@@ -163,7 +170,6 @@ void setValue() {
 #define MAX_TIME (4000ul*1000000ul)
 
 void loop() {
-  loop_t = micros();
 
   if (loop_t > MAX_TIME) {
     // turn off all LEDs
@@ -199,4 +205,5 @@ void loop() {
 
   // Wait for P2
   while (micros() - loop_t < P2_TIME) ;
+  loop_t += P2_TIME;
 }
