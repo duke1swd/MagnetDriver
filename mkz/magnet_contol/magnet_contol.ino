@@ -1,3 +1,5 @@
+#define BUSTEST
+
 // Pins that take data from RPi to MKZ
 // These represent a 4-bit number
 #define	PIN_OL0	6
@@ -66,6 +68,12 @@ void setup() {
   // Turn on the built-in LED.  We are awake!
   digitalWrite(PIN_LED0, HIGH);
 
+#ifdef DEBUG
+  Serial.begin(9600);
+  while (!Serial)
+    ;
+#endif
+
   loop_t = micros();
 }
 
@@ -97,7 +105,12 @@ void getCommand() {
 // Read the ADC pin and convert it to an output value
 void getValue() {
 
-/*XXX QQQ test stuff */value = command * 2; return;
+#ifdef BUSTEST
+  value = command * 2;
+  if (command & 1) value |= 1;
+  if (command & 8) value |= 0x20;
+  return;
+#endif
 
   if (!enabled) {
     value = 0;
@@ -186,6 +199,10 @@ void loop() {
   // Start by lowering clock and sampling the command
   digitalWrite(PIN_CLOCK, LOW);
   getCommand();
+
+#ifdef DEBUG
+  Serial.println(command);delay(250);return;
+#endif
 
   // Now that we have the command, set the magnet
   setMagnet();
