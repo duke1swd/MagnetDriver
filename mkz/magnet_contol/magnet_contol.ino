@@ -96,6 +96,9 @@ void getCommand() {
 //
 // Read the ADC pin and convert it to an output value
 void getValue() {
+
+/*XXX QQQ test stuff */value = command * 2; return;
+
   if (!enabled) {
     value = 0;
     return;
@@ -114,6 +117,7 @@ void getValue() {
   if (value > ADC_MAX)
     value = ADC_MAX;
   value += 1;
+
 }
 
 //
