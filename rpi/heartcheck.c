@@ -11,16 +11,23 @@
 #include <wiringPi.h>
 #include <pthread.h>
 
+#include "pins.h"
+
 #define	MAXPIN	53
+#define	MAXECHO	15
 
 char *myname;
 int pin;
+int echo_mode;
+int echo_value;
 int debug;
 
 static void
 set_defaults()
 {
-	pin = 29;
+	pin = CLK;
+	echo_mode = 0;
+	echo_value = 0;
 	debug = 0;
 }
 
@@ -32,6 +39,7 @@ usage()
 		myname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "\t-p <pin number (%d)>\n", pin);
+	fprintf(stderr, "\t-e <echo value (disabled)>\n");
 	fprintf(stderr, "\t-d (set debugging mode)\n");
 	exit(1);
 }
@@ -41,16 +49,23 @@ grok_args(int argc, char **argv) {
 	int c;
 	int nargs;
 	int errors;
+	int pin_set;
 
 	errors = 0;
+	pin_set = 0;
 	set_defaults();
-	while ((c = getopt(argc, argv, "dp:")) != EOF)
+	while ((c = getopt(argc, argv, "e:dp:")) != EOF)
 	switch (c) {
+		case 'e':
+			echo_mode++;
+			echo_value = atoi(optarg);
+			break;
 		case 'd':
 			debug++;
 			break;
 		case 'p':
 			pin = atoi(optarg);
+			pin_set++;
 			break;
 		default:
 			usage();
@@ -62,6 +77,19 @@ grok_args(int argc, char **argv) {
 		fprintf(stderr, "%s: pin number (%d) must be "
 				"in the range [0-%d]\n",
 			myname, pin, MAXPIN);
+		errors++;
+	}
+
+	if (echo_mode && (echo_value < 0 || echo_value > MAXECHO)) {
+		fprintf(stderr, "%s: echo value (%d) must be in the range [0-%d]\n",
+			myname,
+			echo_value);
+		errors++;
+	}
+
+	if (pin_set && echo_mode) {
+		fprintf(stderr, "%s: pins cannot be adjusted with echo mode\n",
+			myname);
 		errors++;
 	}
 
@@ -187,6 +215,105 @@ print_stamps()
 	}
 }
 
+static void
+setup()
+{
+	wiringPiSetup();
+
+	pinMode(pin, INPUT);
+
+	if (echo_mode) {
+		pinMode(OL0, OUTPUT);
+		pinMode(OL1, OUTPUT);
+		pinMode(OL2, OUTPUT);
+		pinMode(OL3, OUTPUT);
+		
+		pinMode(IL0, INPUT);
+		pinMode(IL1, INPUT);
+		pinMode(IL2, INPUT);
+		pinMode(IL3, INPUT);
+		pinMode(IL4, INPUT);
+		pinMode(IL5, INPUT);
+
+		pinMode(SW1, INPUT);
+
+		pinMode(CLK, INPUT);
+	}
+}
+
+static void
+heartbeat_test(){
+	spawn_counter();
+	sleep(1);
+	printf("Counter = %d\n", count);
+	print_stamps();
+}
+
+static void
+set_output(int v)
+{
+	if (v & 01)
+		digitalWrite(OL0, HIGH);
+	else
+		digitalWrite(OL0, LOW);
+
+	if (v & 02)
+		digitalWrite(OL1, HIGH);
+	else
+		digitalWrite(OL1, LOW);
+
+	if (v & 04)
+		digitalWrite(OL2, HIGH);
+	else
+		digitalWrite(OL2, LOW);
+
+	if (v & 01)
+		digitalWrite(OL3, HIGH);
+	else
+		digitalWrite(OL3, LOW);
+}
+
+static int
+get_input()
+{
+	int v;
+
+	v = 0;
+
+
+	if (digitalRead(IL0))
+		v |= 0x1;
+
+	if (digitalRead(IL1))
+		v |= 0x2;
+
+	if (digitalRead(IL2))
+		v |= 0x4;
+
+	if (digitalRead(IL3))
+		v |= 0x8;
+
+	if (digitalRead(IL4))
+		v |= 0x10;
+
+	if (digitalRead(IL5))
+		v |= 0x20;
+
+	return v;
+}
+
+static void
+echo_test()
+{
+	int v;
+
+	printf("Setting value %d\n", echo_value);
+	set_output(echo_value);
+	sleep(1);
+	v = get_input();
+	printf("Got value %d\n", v);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -194,14 +321,12 @@ main(int argc, char **argv)
 	myname = *argv;
 
 	grok_args(argc, argv);
+	setup();
 
-	wiringPiSetup();
-	pinMode(pin, INPUT);
-
-	spawn_counter();
-	sleep(1);
-	printf("Counter = %d\n", count);
-	print_stamps();
+	if (echo_mode)
+		echo_test();
+	else
+		heartbeat_test();
 
 	return 0;
 }
