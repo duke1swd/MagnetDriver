@@ -234,7 +234,7 @@ setup()
 
 	pinMode(pin, INPUT);
 
-	if (echo_mode) {
+	if (echo_mode || stress_mode) {
 		pinMode(OL0, OUTPUT);
 		pinMode(OL1, OUTPUT);
 		pinMode(OL2, OUTPUT);
