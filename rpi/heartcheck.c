@@ -252,22 +252,22 @@ heartbeat_test(){
 static void
 set_output(int v)
 {
-	if (v & 01)
+	if (v & 0x1)
 		digitalWrite(OL0, HIGH);
 	else
 		digitalWrite(OL0, LOW);
 
-	if (v & 02)
+	if (v & 0x2)
 		digitalWrite(OL1, HIGH);
 	else
 		digitalWrite(OL1, LOW);
 
-	if (v & 04)
+	if (v & 0x4)
 		digitalWrite(OL2, HIGH);
 	else
 		digitalWrite(OL2, LOW);
 
-	if (v & 01)
+	if (v & 0x8)
 		digitalWrite(OL3, HIGH);
 	else
 		digitalWrite(OL3, LOW);
