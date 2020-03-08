@@ -20,6 +20,7 @@ char *myname;
 int pin;
 int echo_mode;
 int echo_value;
+int stress_mode;
 int debug;
 
 static void
@@ -28,6 +29,7 @@ set_defaults()
 	pin = CLK;
 	echo_mode = 0;
 	echo_value = 0;
+	stress_mode = 0;
 	debug = 0;
 }
 
@@ -40,6 +42,7 @@ usage()
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "\t-p <pin number (%d)>\n", pin);
 	fprintf(stderr, "\t-e <echo value (disabled)>\n");
+	fprintf(stderr, "\t-E (set stress mode)\n");
 	fprintf(stderr, "\t-d (set debugging mode)\n");
 	exit(1);
 }
@@ -54,8 +57,11 @@ grok_args(int argc, char **argv) {
 	errors = 0;
 	pin_set = 0;
 	set_defaults();
-	while ((c = getopt(argc, argv, "e:dp:")) != EOF)
+	while ((c = getopt(argc, argv, "Ee:dp:")) != EOF)
 	switch (c) {
+		case 'E':
+			stress_mode++;
+			break;
 		case 'e':
 			echo_mode++;
 			echo_value = atoi(optarg);
@@ -87,8 +93,14 @@ grok_args(int argc, char **argv) {
 		errors++;
 	}
 
-	if (pin_set && echo_mode) {
-		fprintf(stderr, "%s: pins cannot be adjusted with echo mode\n",
+	if (pin_set && (echo_mode || stress_mode)) {
+		fprintf(stderr, "%s: pins cannot be adjusted with echo tests\n",
+			myname);
+		errors++;
+	}
+
+	if (echo_mode && stress_mode) {
+		fprintf(stderr, "%s: only one of echo mode and stress mode can be selected.\n",
 			myname);
 		errors++;
 	}
@@ -314,6 +326,69 @@ echo_test()
 	printf("Got value %d\n", v);
 }
 
+static int
+fast_echo_test(int v1)
+{
+	int v2;
+
+	// Clock is supposed to be high when we come here,
+	// except for the first iteration.
+	while (digitalRead(CLK) == 0) ;
+	set_output(v1);
+
+	// value is consumed on falling edge
+	while (digitalRead(CLK) == 1) ;
+
+	// Read the value when clock goes high again
+	while (digitalRead(CLK) == 0) ;
+	v2 = get_input();
+	v1 = v1 * 2;
+	if (v1 & 0x2)
+		v1 |= 0x1;
+	if (v1 & 0x10)
+		v1 |= 0x20;
+
+	return v1 == v2;
+}
+
+static volatile int st_flag;
+static volatile int st_tests;
+static volatile int st_good;
+
+static pthread_t stress_thread;
+
+
+static void *
+stress_routine(void *arg)
+{
+	st_good = 0;
+	for (st_tests = 0; st_flag; st_tests++)
+		if (fast_echo_test(st_tests % (MAXECHO + 1)))
+			st_good++;
+}
+
+static void
+stress_test()
+{
+	int r;
+
+	st_flag = 1;
+	r = pthread_create(&stress_thread,
+		NULL,
+		stress_routine,
+		(void *)0);
+	if (r != 0) {
+		fprintf(stderr, "%s: cannot spawn counter thread: %d\n",
+			myname, r);
+		exit(1);
+	}
+
+	sleep(1);
+	st_flag = 0;
+	printf("Stress tests:  %d of %d good\n", st_good, st_tests);
+}
+
+
 int
 main(int argc, char **argv)
 {
@@ -325,6 +400,8 @@ main(int argc, char **argv)
 
 	if (echo_mode)
 		echo_test();
+	else if (stress_mode)
+		stress_test();
 	else
 		heartbeat_test();
 
